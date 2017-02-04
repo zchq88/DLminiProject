@@ -1,13 +1,15 @@
-#定义如何显示评论
+# 定义如何显示评论
 def pretty_print_review_and_label(i):
     print(labels[i] + "\t:\t" + reviews[i][:80] + "...")
+
+
 # What we know!获取评论数据
-g = open('reviews.txt','r')
-reviews = list(map(lambda x:x[:-1],g.readlines()))
+g = open('reviews.txt', 'r')
+reviews = list(map(lambda x: x[:-1], g.readlines()))
 g.close()
 # What we WANT to know!获取评价数据
-g = open('labels.txt','r')
-labels = list(map(lambda x:x[:-1].upper(),g.readlines()))
+g = open('labels.txt', 'r')
+labels = list(map(lambda x: x[:-1].upper(), g.readlines()))
 g.close()
 
 from collections import Counter
@@ -15,14 +17,15 @@ import numpy as np
 import time
 import sys
 
-#定义词频计数器
+'''
+# 定义词频计数器
 positive_counts = Counter()
 negative_counts = Counter()
 total_counts = Counter()
 
-#统计不同结果词频
+# 统计不同结果词频
 for i in range(len(reviews)):
-    if(labels[i] == 'POSITIVE'):
+    if (labels[i] == 'POSITIVE'):
         for word in reviews[i].split(" "):
             positive_counts[word] += 1
             total_counts[word] += 1
@@ -31,34 +34,35 @@ for i in range(len(reviews)):
             negative_counts[word] += 1
             total_counts[word] += 1
 
-#定义好坏比例统计数器
+# 定义好坏比例统计数器
 pos_neg_ratios = Counter()
 
-#计算不同结果词频比率
-for term,cnt in list(total_counts.most_common()):
-    if(cnt > 100):
-        pos_neg_ratio = positive_counts[term] / float(negative_counts[term]+1)
+# 计算不同结果词频比率
+for term, cnt in list(total_counts.most_common()):
+    if (cnt > 100):
+        pos_neg_ratio = positive_counts[term] / float(negative_counts[term] + 1)
         pos_neg_ratios[term] = pos_neg_ratio
 
-#标准化比率正态化
-for word,ratio in pos_neg_ratios.most_common():
-    if(ratio > 1):
+# 标准化比率正态化
+for word, ratio in pos_neg_ratios.most_common():
+    if (ratio > 1):
         pos_neg_ratios[word] = np.log(ratio)
     else:
-        pos_neg_ratios[word] = -np.log((1 / (ratio+0.01)))
+        pos_neg_ratios[word] = -np.log((1 / (ratio + 0.01)))
 
 vocab = set(total_counts.keys())
 vocab_size = len(vocab)
 
-#定义输入标准化的字典
-layer_0 = np.zeros((1,vocab_size))
+# 定义输入标准化的字典
+layer_0 = np.zeros((1, vocab_size))
 
-#定义词的序列字典
+# 定义词的序列字典
 word2index = {}
-for i,word in enumerate(vocab):
+for i, word in enumerate(vocab):
     word2index[word] = i
 
-#输入文字根据word2index转词频
+
+# 输入文字根据word2index转词频
 def update_input_layer(review):
     global layer_0
     # clear out previous state, reset the layer to be all 0s
@@ -66,33 +70,73 @@ def update_input_layer(review):
     for word in review.split(" "):
         layer_0[0][word2index[word]] += 1
 
-#定义输出数据转数字
+
+# 定义输出数据转数字
 def get_target_for_label(label):
-    if(label == 'POSITIVE'):
+    if (label == 'POSITIVE'):
         return 1
     else:
         return 0
+'''
 
-
-
-#定义神经网络
+# 定义神经网络
 class SentimentNetwork:
-
-    def __init__(self, reviews, labels, hidden_nodes=10, learning_rate=0.1):
+    def __init__(self, reviews, labels, min_count=10, polarity_cutoff=0.1, hidden_nodes=10, learning_rate=0.1):
 
         # set our random number generator
         np.random.seed(1)
-
-        self.pre_process_data(reviews, labels)
+        ##project6初始化筛选特征
+        self.pre_process_data(reviews, polarity_cutoff, min_count)
 
         self.init_network(len(self.review_vocab), hidden_nodes, 1, learning_rate)
-    #根据评论和标签初始化词的字典和标签字典
-    def pre_process_data(self, reviews, labels):
 
+    # 根据评论和标签初始化词的字典和标签字典
+    def pre_process_data(self, reviews, polarity_cutoff, min_count):
+        # project6计算不同结果的词频比率
+        positive_counts = Counter()
+        negative_counts = Counter()
+        total_counts = Counter()
+
+        for i in range(len(reviews)):
+            if (labels[i] == 'POSITIVE'):
+                for word in reviews[i].split(" "):
+                    positive_counts[word] += 1
+                    total_counts[word] += 1
+            else:
+                for word in reviews[i].split(" "):
+                    negative_counts[word] += 1
+                    total_counts[word] += 1
+
+        pos_neg_ratios = Counter()
+
+        for term, cnt in list(total_counts.most_common()):
+            if (cnt >= 50):
+                pos_neg_ratio = positive_counts[term] / float(negative_counts[term] + 1)
+                pos_neg_ratios[term] = pos_neg_ratio
+
+        for word, ratio in pos_neg_ratios.most_common():
+            if (ratio > 1):
+                pos_neg_ratios[word] = np.log(ratio)
+            else:
+                pos_neg_ratios[word] = -np.log((1 / (ratio + 0.01)))
+
+        '''
         review_vocab = set()
         for review in reviews:
             for word in review.split(" "):
                 review_vocab.add(word)
+        self.review_vocab = list(review_vocab)
+        '''
+        # project6筛选特征
+        review_vocab = set()
+        for review in reviews:
+            for word in review.split(" "):
+                if (total_counts[word] > min_count):  # 如果词频大于min_count
+                    if (word in pos_neg_ratios.keys()):  # 并且词的的正态化比率大于polarity_cutoff
+                        if ((pos_neg_ratios[word] >= polarity_cutoff) or (pos_neg_ratios[word] <= -polarity_cutoff)):
+                            review_vocab.add(word)  # 加入特征
+                    else:
+                        review_vocab.add(word)
         self.review_vocab = list(review_vocab)
 
         label_vocab = set()
@@ -128,19 +172,19 @@ class SentimentNetwork:
         self.learning_rate = learning_rate
 
         self.layer_0 = np.zeros((1, input_nodes))
-        #project5 增加layer_1
+        # project5 增加layer_1
         self.layer_1 = np.zeros((1, hidden_nodes))
 
-    #评论转词频矩阵
+    # 评论转词频矩阵
     def update_input_layer(self, review):
 
         # clear out previous state, reset the layer to be all 0s
         self.layer_0 *= 0
         for word in review.split(" "):
             if (word in self.word2index.keys()):
-                self.layer_0[0][self.word2index[word]] = 1 #project4减少噪声权重，不统计词频
+                self.layer_0[0][self.word2index[word]] = 1  # project4减少噪声权重，不统计词频
 
-    #标签转01输出
+    # 标签转01输出
     def get_target_for_label(self, label):
         if (label == 'POSITIVE'):
             return 1
@@ -154,7 +198,7 @@ class SentimentNetwork:
         return output * (1 - output)
 
     def train(self, training_reviews_raw, training_labels):
-        #project5减少噪声权重，统计每个评论中那些词出现过
+        # project5减少噪声权重，统计每个评论中那些词出现过
         training_reviews = list()
         for review in training_reviews_raw:
             indices = set()
@@ -182,7 +226,7 @@ class SentimentNetwork:
             # self.update_input_layer(review)
 
             # Hidden layer
-            #layer_1 = self.layer_0.dot(self.weights_0_1)
+            # layer_1 = self.layer_0.dot(self.weights_0_1)
             # project5减少噪声权重，统计每个评论中那些词出现过
             self.layer_1 *= 0
             for index in review:
@@ -255,5 +299,8 @@ class SentimentNetwork:
         else:
             return "NEGATIVE"
 
-mlp = SentimentNetwork(reviews[:-1000],labels[:-1000], learning_rate=0.001)
-mlp.train(reviews[:-1000],labels[:-1000])
+
+mlp = SentimentNetwork(reviews[:-1000], labels[:-1000], min_count=20, polarity_cutoff=0.5, learning_rate=0.0001)
+mlp.train(reviews[:-3000], labels[:-3000])
+print('')
+mlp.test(reviews[-1000:], labels[-1000:])
